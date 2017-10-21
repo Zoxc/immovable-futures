@@ -37,11 +37,11 @@ impl<T: Generator<Yield = NotReady, Return = R> + ?Move, R: ?Move> Future for As
 
 #[macro_export]
 macro_rules! async {
-    ($b:block) => ({
+    ($($b:tt)*) => ({
         AsFuture(static move || {
             // Force a generator by using `yield`
             if false { unsafe { yield ::std::mem::uninitialized() } };
-            $b
+            $($b)*
         })
     })
 }
@@ -64,11 +64,11 @@ where
     A: Future,
     F: FnOnce(A::Return) -> U,
 {
-    async! {{
+    async! {
         let f = f;
         let r = await!(future);
         f(r)
-    }}
+    }
 }
 
 pub enum OneOf<A, B> {
@@ -94,7 +94,7 @@ where
     A: Future<Return = R>,
     B: Future<Return = R>,
 {
-    async! {{
+    async! {
         loop {
             match (a.poll(), b.poll()) {
                 (State::Complete(r), _) => return (r, OneOf::B(b)),
@@ -102,7 +102,7 @@ where
                 (State::Yielded(y), _) => yield y,
             }
         }
-    }}
+    }
 }
 
 /// Returns the result of the first future to finish
@@ -111,9 +111,9 @@ where
     A: Future<Return = R>,
     B: Future<Return = R>,
 {
-    async! {{
+    async! {
         await!(select(&mut a, &mut b)).0
-    }}
+    }
 }
 
 /// Waits for two futures to complete
@@ -122,12 +122,12 @@ where
     A: Future<Return = RA>,
     B: Future<Return = RB>,
 {
-    async! {{
+    async! {
         loop {
             match (a.poll(), b.poll()) {
                 (State::Complete(ra), State::Complete(rb)) => return (ra, rb),
                 (State::Yielded(y), _) | (_, State::Yielded(y)) => yield y,
             }
         }
-    }}
+    }
 }
