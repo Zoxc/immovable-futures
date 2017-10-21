@@ -12,7 +12,7 @@ pub struct NotReady(());
 pub type Poll<R> = State<NotReady, R>;
 
 pub trait Future: ?Move {
-    type Return: ?Move;
+    type Return;
 
     fn poll(&mut self) -> Poll<Self::Return>;
 }
@@ -27,7 +27,7 @@ impl<'a, T: ?Move + Future> Future for &'a mut T {
 
 pub struct AsFuture<T: ?Move>(T);
 
-impl<T: Generator<Yield = NotReady, Return = R> + ?Move, R: ?Move> Future for AsFuture<T> {
+impl<T: Generator<Yield = NotReady, Return = R> + ?Move, R> Future for AsFuture<T> {
     type Return = R;
 
     fn poll(&mut self) -> Poll<Self::Return> {
@@ -76,7 +76,7 @@ pub enum OneOf<A, B> {
     B(B),
 }
 
-impl<A: Future<Return = R>, B: Future<Return = R>, R: ?Move> Future for OneOf<A, B> {
+impl<A: Future<Return = R>, B: Future<Return = R>, R> Future for OneOf<A, B> {
     type Return = R;
 
     fn poll(&mut self) -> Poll<Self::Return> {
@@ -89,7 +89,7 @@ impl<A: Future<Return = R>, B: Future<Return = R>, R: ?Move> Future for OneOf<A,
 
 /// Returns the result of the first future to finish and the uncompleted future
 /// This requires movable futures
-pub fn select<A, B, R: ?Move>(mut a: A, mut b: B) -> impl Future<Return = (R, OneOf<A, B>)>
+pub fn select<A, B, R>(mut a: A, mut b: B) -> impl Future<Return = (R, OneOf<A, B>)>
 where
     A: Future<Return = R>,
     B: Future<Return = R>,
@@ -110,7 +110,7 @@ where
 }
 
 /// Returns the result of the first future to finish
-pub fn race<A: ?Move, B: ?Move, R: ?Move>(mut a: A, mut b: B) -> impl Future<Return = R>
+pub fn race<A: ?Move, B: ?Move, R>(mut a: A, mut b: B) -> impl Future<Return = R>
 where
     A: Future<Return = R>,
     B: Future<Return = R>,
@@ -121,16 +121,35 @@ where
 }
 
 /// Waits for two futures to complete
-pub fn join<A: ?Move, B: ?Move, RA: ?Move, RB: ?Move>(mut a: A, mut b: B) -> impl Future<Return = (RA, RB)>
+pub fn join<A: ?Move, B: ?Move, RA, RB>(mut a: A, mut b: B) -> impl Future<Return = (RA, RB)>
 where
     A: Future<Return = RA>,
     B: Future<Return = RB>,
 {
     async! {
+        let mut ra = None;
+        let mut rb = None;
         loop {
-            match (a.poll(), b.poll()) {
-                (State::Complete(ra), State::Complete(rb)) => return (ra, rb),
-                (State::Yielded(y), _) | (_, State::Yielded(y)) => yield y,
+            let mut must_yield = None;
+
+            if ra.is_none() {
+                match a.poll() {
+                    State::Complete(r) => ra = Some(r),
+                    State::Yielded(y) => must_yield = Some(y),
+                }
+            }
+
+            if rb.is_none() {
+                match b.poll() {
+                    State::Complete(r) => rb = Some(r),
+                    State::Yielded(y) => must_yield = Some(y),
+                }
+            }
+
+            if let Some(y) = must_yield {
+                yield y
+            } else {
+                return (ra.unwrap(), rb.unwrap());
             }
         }
     }
