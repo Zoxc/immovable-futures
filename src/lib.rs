@@ -96,10 +96,14 @@ where
 {
     async! {
         loop {
-            match (a.poll(), b.poll()) {
-                (State::Complete(r), _) => return (r, OneOf::B(b)),
-                (_, State::Complete(r)) => return (r, OneOf::A(a)),
-                (State::Yielded(y), _) => yield y,
+            match a.poll() {
+                State::Complete(r) => return (r, OneOf::B(b)),
+                State::Yielded(_) => (),
+            }
+
+            match b.poll() {
+                State::Complete(r) => return (r, OneOf::A(a)),
+                State::Yielded(y) => yield y,
             }
         }
     }
