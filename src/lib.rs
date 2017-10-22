@@ -27,8 +27,8 @@ impl<'a, T: ?Move + Future> Future for &'a mut T {
 
 pub struct AsFuture<T: ?Move>(T);
 
-impl<T: Generator<Yield = NotReady, Return = R> + ?Move, R> Future for AsFuture<T> {
-    type Return = R;
+impl<T: Generator<Yield = NotReady> + ?Move> Future for AsFuture<T> where T::Return: Move {
+    type Return = T::Return;
 
     fn poll(&mut self) -> Poll<Self::Return> {
         self.0.resume()
