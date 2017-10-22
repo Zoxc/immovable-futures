@@ -65,9 +65,7 @@ where
     F: FnOnce(A::Return) -> U,
 {
     async! {
-        let f = f;
-        let r = await!(future);
-        f(r)
+        f(await!(future))
     }
 }
 
